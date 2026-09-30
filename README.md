@@ -8,4 +8,10 @@ Team **git-happens** — our entry for the Tectonic hackathon.
 - _teammate 3_
 
 ## Getting started
-_Setup steps will go here once the stack is chosen._
+KBC Travel Assistant demo: React + TypeScript + Tailwind on Vite 6 (runs on Node 20+).
+
+```bash
+npm install
+npm run dev     # http://localhost:5173
+npm run build   # must pass before merging to main
+```
