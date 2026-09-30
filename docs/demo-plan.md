@@ -24,15 +24,14 @@ One shared format, whatever the source (our synthetic file today, KBC core or Ba
 ```
 
 ### 2. Scenarios (what Kate knows)
-`arbiter/src/scenarios.json`: 28 *situations* a transaction can fall into. Each lists the *actions* Kate can take, in KBC's own wording from `docs/kate-capabilities.md`.
-An action is an **offer** (sells something, rate-limited) or a **service** (helps, never rate-limited).
+`src/data/scenarios.ts` is the catalogue: 33 KBC scenarios a transaction can trigger, in KBC's own wording. `src/arbiter/catalogue.ts` groups them into *situations* by life event and marks each as an **offer** (sells something, rate-limited) or a **service** (helps, never rate-limited).
 
 | Situation | Actions | Used in the stage script |
 |---|---|---|
-| `travel` | check card enabled abroad (service, 7 days before) · travel insurance (offer, 10 days before) | yes |
-| `seasonal_spend` | Christmas savings pot (offer, our idea) | yes |
+| `travel` | card-abroad-check (service, 7 days before) · travel-insurance (offer, 10 days before) | yes |
+| `new-pet` | pet-insurance (offer) | yes |
 | `none` | — | yes |
-| 25 others | duplicate payment, low balance, warranty, energy supplier, pet insurance, … | no |
+| all others | duplicate payment, low balance, warranty, energy supplier, … | no |
 
 ### 3. Classify
 One Jev request per transaction. Its context is the transaction plus a short customer summary (products held, city). It asks one **Choice** question: "Which situation does this transaction show?" The options are the scenario descriptions above, including `none`.
@@ -77,17 +76,17 @@ Each card moves left to right. The arbiter column shows held cards with their re
 Script (~3 min):
 1. **Delhaize €38** → classified `none` (0.96) → stops. *"Most payments need nothing."*
 2. **Ryanair €142, BRU→BCN 14 Nov** → `travel` 0.91 → proposal → **held: not before 4 Nov**. *"Kate knows, but now isn't the right moment."*
-3. **Fnac €80** → `seasonal_spend` 0.55 → **held: need more evidence**.
-4. **Bol.com toys €45** → `seasonal_spend` 0.6 → **merged → 0.82**, now ready.
-5. **Tick to 4 Nov** → both travel insurance (0.91) and seasonal (0.82) are ready → the arbiter **sends travel insurance** and holds seasonal with "contact limit: next week". The phone buzzes.
+3. **Tom&Co pet shop €65** → `new-pet` 0.55 → **held: need more evidence**.
+4. **Vet €95, at 22:40** → `new-pet` 0.6 → **merged → 0.82**, then **held: quiet hours**.
+5. **Tick to 4 Nov** → both travel insurance (0.91) and pet insurance (0.82) are ready → the arbiter **sends travel insurance** and holds pet insurance with "contact limit: next week". The phone buzzes.
 6. **Tap "Not now"** → travel insurance is blocked for 30 days.
 7. **Tick to 7 Nov** → the card-abroad check goes out anyway: *"It's a service, not a sale, so it doesn't count toward the limit."*
-8. **Tick to 11 Nov** → seasonal is sent.
+8. **Tick to 11 Nov** → pet insurance is sent.
 9. **Click "Run 1,000"** → the background customers flow through, and the counters show e.g. *1,000 transactions → 62 proposals → 14 sent, 31 held, 17 dropped*. *"This is how it scales: cheap sorting for every transaction, and Kate only speaks when the arbiter allows it."*
 
 ## Build order (each < 2 h)
 1. Transaction format + synthetic data (Lotte's script + a generator for background customers).
-2. `scenarios.json` + keyword fallback classifier. The pipeline runs end to end in the console.
+2. Scenario catalogue + MCC fallback classifier. The pipeline runs end to end in the console (`npm run arbiter`).
 3. Arbiter: queue, hold/merge/drop/send, contact policy, simulated clock.
 4. Pipeline UI: five columns, "Next tick", phone mockup.
 5. Feedback buttons wired back to the arbiter.

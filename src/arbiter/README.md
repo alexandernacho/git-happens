@@ -4,32 +4,29 @@ Turns classified transactions into proposals, queues them per customer, and deci
 Design: `docs/decisions.md` (D4, D10–D13) and `docs/demo-plan.md`.
 
 ```bash
-npm install
-npm run demo    # replays Lotte's script and prints every decision
+npm run arbiter   # replays Lotte's script; routes with Jev live if TYPESAFE_API_KEY is set
 npm test
 ```
 
-## Contract (`src/types.ts`)
+## Contract (`types.ts`)
 
-**In, from classification:** `ClassifiedTransaction` = `{ transaction, scenario, probabilities, eventDate? }`.
-The options to classify into are the situation `description` fields in `src/scenarios.json`, plus `none`.
-A situation's `needs` field says what extra context the classifier must include: `history` (recent transactions), `balance`, or `event_date`.
+**In, from the Jev router (PR #11):** `fromRoute(transaction, routeResult, customerId, time?)` turns `/api/route-transaction`'s answer into a `ClassifiedTransaction`. In the browser, `classify(transaction, customerId)` calls the router and falls back to the catalogue's MCC hints (`fromMcc`) when it answers 503.
 
-**Scenarios:** each situation lists the actions Kate can take, using KBC's own wording (`docs/kate-capabilities.md`).
-An action is an `offer` (sells something, rate-limited) or a `service` (helps, never rate-limited). One transaction creates one proposal per action the customer qualifies for.
+**Scenarios:** `src/data/scenarios.ts` is the one catalogue. `catalogue.ts` groups its scenarios into *situations* by `lifeEvent` (travel = card-abroad-check + travel-insurance) and adds what the arbiter needs per scenario: `offer` or `service`, product rules and timing. Jev picks one scenario; the arbiter adds up the probabilities within its situation and proposes every action in it the customer qualifies for.
 
 **Out, to actions:** `Decision` = `{ at, customerId, scenario, actionId, decision, action?, reason, detail, confidence, proposal }`.
-Only `decision: "send"` means contact the customer: `action` is `"offer"`, `"service"` or `"question"`. `proposal.label` and `proposal.product` say what to talk about. Everything else is for the pipeline UI.
+Only `decision: 'send'` means contact the customer: `action` is `"offer"`, `"service"` or `"question"`. `proposal.label` and `proposal.product` say what to talk about; `proposal.channel` is Jev's push/feed suggestion. Everything else is for the pipeline UI.
 
 **In, from actions:** `Feedback` = `{ customerId, scenario, actionId, answer: "yes" | "no" | "not_now", at }`.
 
 ## Usage
 
 ```ts
-import { Arbiter, createProposals, scenarios } from "./src/index";
+import { Arbiter, classify, createProposals, situations } from './arbiter'; // from src/
 
 const arbiter = new Arbiter();
-const { proposals, skipped } = createProposals(classified, customer, scenarios);
+const classified = await classify(transaction, customer.id);  // Jev, or MCC fallback
+const { proposals, skipped } = createProposals(classified, customer, situations);
 proposals.forEach((p) => arbiter.submit(p));      // returns merge/drop decisions
 arbiter.tick(now);                                // returns send/hold/drop decisions
 arbiter.feedback({ customerId, scenario, actionId, answer: "not_now", at });
@@ -39,7 +36,7 @@ arbiter.stats();                                  // counters for "Run 1,000"
 
 The arbiter has no clock. The caller drives time with `tick(now)`, so the same code serves the demo's "Next tick" button and the tests.
 
-## Rules (`src/policy.ts`)
+## Rules (`policy.ts`)
 
 | Rule | Value |
 |---|---|

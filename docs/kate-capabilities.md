@@ -1,40 +1,8 @@
 # Kate's capabilities: what the arbiter uses and what it doesn't
 
 Source: KBC's public communications about Kate (list collected 2026-09-30).
-The arbiter only handles items **a transaction can trigger**. Those are in `arbiter/src/scenarios.json`, grouped by situation, with the KBC wording as each action's `label`.
+The arbiter only handles items **a transaction can trigger**. Those are in the scenario catalogue `src/data/scenarios.ts` (33 scenarios, KBC wording), grouped into situations by life event in `src/arbiter/catalogue.ts`.
 Everything else is listed here so we can say in the pitch: "we reuse what Kate already does; we only add *when* she does it."
-
-## Used in scenarios.json (triggered by a transaction)
-
-| Situation | Actions (KBC wording) |
-|---|---|
-| `travel` | Checking whether a debit card is enabled for use abroad before travelling · Helping customers take out travel insurance |
-| `moving` | Helping customers update personal information · Helping customers review their home insurance · Providing information about home / family insurance |
-| `salary_up` | Showing potential savings opportunities · Providing information about insurance savings |
-| `duplicate_payment` | Detecting a duplicate payment |
-| `low_balance` | Sending a low-balance notification · Adjusting an account limit |
-| `large_card_spend` | Adjusting a payment-card limit |
-| `repeated_manual_transfer` | Setting up recurring payments |
-| `new_recurring_payment` | Providing an overview of active direct debits · Tracking subscriptions |
-| `annual_bill` | Providing a reminder before a scheduled payment |
-| `unusual_spending` | Highlighting unusual spending |
-| `foreign_transfer` | Providing information about foreign payments |
-| `shared_expense` | Checking whether another person has reimbursed the customer |
-| `parking_paid` / `public_transport_paid` / `cinema_paid` | Helping customers register parking through 4411 · buy public-transport tickets · buy cinema tickets |
-| `partner_merchant` | Offering cashback opportunities |
-| `electronics_purchase` | Suggesting that customers store an electronics warranty |
-| `car_repair` | Helping customers start a claim for vehicle damage |
-| `home_repair` | Helping customers start a claim for home damage · Asking customers whether they have suffered storm damage |
-| `home_renovation` | Reminding customers when their home insurance should be reviewed · Helping customers explore greener home improvements |
-| `energy_bill` | Suggesting ways to save on energy bills · Suggesting a cheaper energy supplier |
-| `service_voucher_order` | Reminding customers to order new service vouchers · Linking service-voucher services to KBC Mobile |
-| `medical_abroad` | Helping customers start a claim for a travel incident |
-| `hospital_bill` | Turning an AssurCard-related question into a hospitalisation-claim process · Providing information about hospitalisation insurance |
-| `pet_expense` | Helping customers take out pet insurance |
-| `family_growing` | Providing information about family insurance |
-| `car_bought` | Providing information about car insurance |
-| `insurance_elsewhere` | Suggesting a cheaper or more suitable insurance solution |
-| `seasonal_spend` | *Ours, not in KBC's list:* suggesting a savings pot for December spending |
 
 ## Proactive, but triggered by something other than a transaction
 
