@@ -17,7 +17,7 @@ All work is tracked in GitHub. No other task tool.
 ### Rules
 1. **One task = one issue.** No work without an issue. Write the title as an outcome: "User can log in with email", not "auth stuff".
 2. **One owner per issue.** Assign yourself before you start, and move the card to `In Progress`. Unassigned = free to take.
-   Always add new issues to the board (`--project git-happens`). It does not happen automatically.
+   New issues and PRs land on the board in `Todo` automatically.
 3. **Label the priority.** `must` = the demo breaks without it. `nice` = only if time is left. Finish all `must` before any `nice`.
 4. **Keep issues small.** One issue fits in 2 hours or less. Split it if not.
 5. **Branch per issue.** Name: `<issue-number>-<short-slug>`, e.g. `12-email-login`.
@@ -29,7 +29,7 @@ All work is tracked in GitHub. No other task tool.
 ```bash
 gh issue list --assignee @me                      # my open issues
 gh issue list --label must --search "no:assignee" # free must-haves to pick up
-gh issue create --title "User can log in with email" --label must --assignee @me --project git-happens
+gh issue create --title "User can log in with email" --label must --assignee @me
 gh issue develop 12 --checkout                    # create + check out a branch for #12
 gh pr create --fill --body "Closes #12"
 gh pr merge --squash --delete-branch
