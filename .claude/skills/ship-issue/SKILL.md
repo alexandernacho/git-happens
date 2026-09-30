@@ -40,7 +40,7 @@ git switch -c <n>-<short-slug>
 
 Leave uncommitted work that isn't yours alone. Never commit to `main`.
 
-Then move the card to `In Progress` on the board, if you can.
+Don't move the board card. Opening the PR with `Closes #<n>` moves it to `In Progress`.
 
 ## 4. Build
 
