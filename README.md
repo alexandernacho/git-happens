@@ -4,8 +4,9 @@ Team **git-happens** — our entry for the Tectonic hackathon.
 
 ## Team
 - Alexander Coenegrachts
-- _teammate 2_
-- _teammate 3_
+- Jiří Winter
+- Wolfgang Riegler
+- Nicolas Dedrie
 
 ## Getting started
 KBC Travel Assistant demo: the KBC app spots a booked trip in your card payments and walks you
