@@ -24,17 +24,15 @@ One shared format, whatever the source (our synthetic file today, KBC core or Ba
 ```
 
 ### 2. Scenarios (what Kate knows)
-`scenarios.json`. Each scenario is one entry:
+`arbiter/src/scenarios.json`: 28 *situations* a transaction can fall into. Each lists the *actions* Kate can take, in KBC's own wording from `docs/kate-capabilities.md`.
+An action is an **offer** (sells something, rate-limited) or a **service** (helps, never rate-limited).
 
-| Scenario | Description (sent to Jev) | Eligible if | Action | Hold rule |
-|---|---|---|---|---|
-| `travel` | Booking a flight, hotel or trip abroad | no travel insurance | offer travel insurance | send 10 days before the trip, or now if no date is found |
-| `seasonal_spend` | Gift or holiday shopping before December | no savings pot for December | offer a Christmas savings pot | needs 2 matching transactions |
-| `moving` | Rent deposit, moving company, notary | has home insurance | remind to update the address on the policy | send now |
-| `salary_up` | Salary noticeably higher than usual | no savings account | offer a savings account | wait for the 2nd higher salary |
-| `none` | Everyday spending that needs nothing | — | — | — |
-
-`must`: `travel`, `seasonal_spend`, `none`. The others are `nice`.
+| Situation | Actions | Used in the stage script |
+|---|---|---|
+| `travel` | check card enabled abroad (service, 7 days before) · travel insurance (offer, 10 days before) | yes |
+| `seasonal_spend` | Christmas savings pot (offer, our idea) | yes |
+| `none` | — | yes |
+| 25 others | duplicate payment, low balance, warranty, energy supplier, pet insurance, … | no |
 
 ### 3. Classify
 One Jev request per transaction. Its context is the transaction plus a short customer summary (products held, city). It asks one **Choice** question: "Which situation does this transaction show?" The options are the scenario descriptions above, including `none`.
@@ -81,9 +79,11 @@ Script (~3 min):
 2. **Ryanair €142, BRU→BCN 14 Nov** → `travel` 0.91 → proposal → **held: not before 4 Nov**. *"Kate knows, but now isn't the right moment."*
 3. **Fnac €80** → `seasonal_spend` 0.55 → **held: need more evidence**.
 4. **Bol.com toys €45** → `seasonal_spend` 0.6 → **merged → 0.82**, now ready.
-5. **Tick to 4 Nov** → both travel (0.91) and seasonal (0.82) are ready → the arbiter **sends travel** and holds seasonal with "contact limit: next week". The phone buzzes.
-6. **Tap "Not now"** → travel is dropped for 30 days. Next week → seasonal is sent.
-7. **Click "Run 1,000"** → the background customers flow through, and the counters show e.g. *1,000 transactions → 62 proposals → 14 sent, 31 held, 17 dropped*. *"This is how it scales: cheap sorting for every transaction, and Kate only speaks when the arbiter allows it."*
+5. **Tick to 4 Nov** → both travel insurance (0.91) and seasonal (0.82) are ready → the arbiter **sends travel insurance** and holds seasonal with "contact limit: next week". The phone buzzes.
+6. **Tap "Not now"** → travel insurance is blocked for 30 days.
+7. **Tick to 7 Nov** → the card-abroad check goes out anyway: *"It's a service, not a sale, so it doesn't count toward the limit."*
+8. **Tick to 11 Nov** → seasonal is sent.
+9. **Click "Run 1,000"** → the background customers flow through, and the counters show e.g. *1,000 transactions → 62 proposals → 14 sent, 31 held, 17 dropped*. *"This is how it scales: cheap sorting for every transaction, and Kate only speaks when the arbiter allows it."*
 
 ## Build order (each < 2 h)
 1. Transaction format + synthetic data (Lotte's script + a generator for background customers).

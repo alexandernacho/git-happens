@@ -41,3 +41,16 @@ Full design: `docs/demo-plan.md`.
 - A separate "Kate's agenda" panel: covered by the arbiter holding a proposal as *not yet*.
 - A Noul question per scenario: replaced by one Choice question, because a transaction should fall into one scenario.
 - Hand-scored signal weights (airline +0.5…): replaced by Jev probabilities plus eligibility rules.
+
+## Arbiter queue — 2026-09-30
+
+- **D10 Ownership:** A colleague delivers classified transactions: `{ transaction, scenario, probabilities }`. The arbiter work owns `scenarios.json`, the eligibility checks, creating proposals, and the arbiter queue. A second colleague owns the actions: turning a released decision into a Kate message or question, and sending the customer's answer back as feedback. _Rejected:_ the arbiter receiving ready-made proposals.
+- **D11 Form:** A standalone TypeScript module in `arbiter/` with vitest tests and a small CLI that replays Lotte's script and prints every decision. It has no server or UI dependency. _Rejected:_ building it inside a shared server now (would clash with the colleagues' setup).
+- **D12 Medium confidence:** A proposal with confidence 0.4–0.7 is held for up to 7 days waiting for more evidence. If no second matching transaction arrives, it goes out as a light question. A "Yes" answer raises the confidence to 0.9 and puts it back in the queue as an offer. _Rejected:_ dropping it after 7 days; asking right away.
+- **D13 Contact limit:** Per customer, in a rolling 7 days: at most **1 offer** and at most **2 light questions**, counted separately. _Rejected:_ one contact of any kind per week; only offers counting.
+
+## Scenario list from KBC's Kate capabilities — 2026-09-30
+
+- **D14 Scope:** Only capabilities a transaction can trigger go into `arbiter/src/scenarios.json` (28 situations). Reactive capabilities, and proactive ones with non-transaction triggers (PIN, weather, voucher balance), are listed in `docs/kate-capabilities.md`. _Rejected:_ all ~150 items as scenarios (many can never be triggered by a payment, and they'd bloat the classifier's option list).
+- **D15 Situations with actions:** The classifier picks a *situation* (e.g. `travel`). Each situation lists *actions* in KBC's wording, and each action the customer qualifies for becomes its own proposal. Merging, blocking and feedback work per situation + action. _Rejected:_ one scenario = one action (a flight could only trigger either the card check or the insurance offer).
+- **D16 Services vs offers:** An action is an `offer` (sells something) or a `service` (helps). Services skip the weekly contact limit and don't wait for evidence (medium confidence → light question right away), but still wait out quiet hours. _Rejected:_ one shared limit (a duplicate payment could wait a week behind an insurance offer).
