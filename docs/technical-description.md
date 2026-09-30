@@ -1,200 +1,199 @@
 # Technical description
 
-State of `main` at `5ab1bf5` (2026-09-30), after PRs #2, #4, #7, #9 and #12 (which also brought in the Jev router from #11).
+## 1. Overview
 
-## 1. What the repository contains
+KBC's challenge: *understand what each customer needs and respond at exactly the right moment.*
+Our answer is a pipeline that reads every payment, recognises the situations Kate knows how to handle, and lets Kate reach out **first**. It does so only when it helps, at the right time, and rarely enough that it never feels like sales.
 
-Three parts that together answer KBC's challenge: *understand what a customer needs from their transactions and respond at the right moment.*
+```
+ payment ─► 1. detect ─► 2. situation ─► 3. proposals ─► 4. arbiter ─► 5. experience ─► customer
+            rules + Jev    catalogue       per action       queue per       Kate in the       │
+                                                            customer        KBC app           │
+                                               ▲                                              │
+                                               └──────────── 6. feedback ◄────────────────────┘
+```
 
-| Part | What it does | Where | Status |
-|---|---|---|---|
-| **Travel Assistant app** | Phone-frame React demo: spots a booked trip in card payments, then walks the customer through insurance → destination → budget → currency → eSIM. | `src/App.tsx`, `src/screens/`, `src/lib/` | Working, used in `docs/pitch.md` |
-| **Scenario catalogue + Jev router** | 33 KBC scenarios a transaction can trigger. A server endpoint asks Jev (TypeSafe) which scenario a payment fits. | `src/data/scenarios.ts`, `server/scenarioRouter.ts` | Working, needs `TYPESAFE_API_KEY` |
-| **Arbiter** | Turns the router's answer into proposals and decides per customer whether to **send, hold, merge or drop**, following a contact policy. | `src/arbiter/` | Working and tested; not used by the UI yet |
-
-**The UI does not use the Jev router or the arbiter yet** (see §8, gap 1). Today they form two separate pipelines.
+| Stage | Component | Where |
+|---|---|---|
+| Input | Transaction stream: the persona Sofie in the demo | `src/data/transactions.ts` |
+| 1. Detect | Rule detectors (`detectTrip` and others) and the Jev router | `src/lib/`, `server/scenarioRouter.ts` |
+| 2. Situation | Scenario catalogue, grouped by life event | `src/data/scenarios.ts`, `src/arbiter/catalogue.ts` |
+| 3. Proposals | One proposal per action the customer qualifies for | `src/arbiter/proposals.ts` |
+| 4. Arbiter | Decides per customer: send, hold, merge or drop | `src/arbiter/arbiter.ts` |
+| 5. Experience | Kate's push or feed card; the Travel Assistant flow for trips | `src/screens/`, `src/App.tsx` |
+| 6. Feedback | "Add" / "Not now" go back to the arbiter | `src/arbiter/arbiter.ts` |
+| Presenter panel | Shows the pipeline live next to the phone | `src/components/PresenterPanel.tsx` |
 
 ## 2. Stack and commands
 
-- **Frontend:** React 19, TypeScript 6, Tailwind 4, Vite 6 (kept at 6 so it runs on the team's Node 20).
-- **Server:** no separate backend. API endpoints are Vite plugins (`configureServer` / `configurePreviewServer`), so API keys stay on the presenter's laptop. They only exist under `npm run dev` or `npm run preview`.
-- **AI:**
-  - **OpenAI** (`openai` SDK, default `gpt-4.1-mini`) writes the budget tip.
-  - **TypeSafe Jev** (`@typesafe-ai/sdk`) routes each transaction to a scenario.
-- **Tests:** vitest 3 for the arbiter. Plain `node:assert` scripts for the detection rules and the router.
+- **Frontend:** React 19, TypeScript 6, Tailwind 4, Vite 6 (runs on Node 20).
+- **Server:** API endpoints are Vite plugins (`configureServer` / `configurePreviewServer`), so API keys stay on the presenter's laptop and never reach the browser.
+- **AI, used only where language or meaning matters:**
+  - **TypeSafe Jev** (`@typesafe-ai/sdk`) recognises what a payment is about.
+  - **OpenAI** (`gpt-4.1-mini`) writes Kate's personal money tip.
+- **Tests:** vitest for the pipeline. Assertion scripts for the rules and the router.
 
 ```bash
 npm run dev            # app on http://localhost:5173 (wide window shows the presenter panel)
-npm run build          # tsc -b + vite build; must pass before merging
-npm test               # vitest: 25 arbiter tests, including the full stage script
-npm run check          # detection rules sanity check (no key needed)
-npm run check:router   # 12 labelled payments through Jev (needs TYPESAFE_API_KEY)
-npm run arbiter        # replays the arbiter stage script; live Jev if a key is set
+npm run build          # tsc -b + vite build
+npm test               # pipeline tests, including the full stage script
+npm run check          # rule detectors on the persona
+npm run check:router   # 12 labelled payments through Jev
+npm run arbiter        # replays the stage script in the terminal
 ```
 
-Keys go in `.env.local`, which git ignores; the template is `.env.example`:
-- `OPENAI_API_KEY`, `OPENAI_MODEL`
-- `TYPESAFE_API_KEY`, `TYPESAFE_MODEL`
+Keys live in `.env.local` (template: `.env.example`): `TYPESAFE_API_KEY` and `OPENAI_API_KEY`. Every AI call has a fallback, so the demo runs identically without a network.
 
-Every AI call has a fallback, so the demo runs without any key.
+## 3. Input: transactions
 
-## 3. Repository map
+All sources deliver one format: `{ id, date, description, amount, mcc, country }`.
+- **In the demo:** `generatePersona()` produces 251 transactions for **Sofie, 29, Leuven**, seeded so every run is identical:
+  - **Everyday life:** salary, rent, groceries, rail, restaurants and subscriptions.
+  - **A past trip:** a Barcelona weekend 4 months ago, with card spend in Spain.
+  - **The new trip:** a Brussels Airlines BRU–JFK flight and a New York hotel, paid 2 days ago.
 
-```
-server/
-  budgetTip.ts          POST /api/budget-tip        → OpenAI, 2-sentence tip (503 → canned tip)
-  scenarioRouter.ts     POST /api/route-transaction → Jev Choice + Noul (503 without key)
-src/
-  App.tsx               step state machine, wires screens + presenter panel
-  flow.ts               steps, trip plan, customer choices; skips currency/eSIM inside the EU
-  screens/              8 screens: Home, TripDetected, Insurance, Destination, Budget, Currency, Esim, TripReady
-  components/           PhoneFrame, KbcHeader, FlowScreen, Button, PresenterPanel
-  data/
-    transactions.ts     synthetic persona "Sofie" (Leuven), 180 days, seeded, dates relative to today
-    mcc.ts              ISO 18245 codes → travel kind + labels
-    destinations.ts     NYC, London, Tokyo, Barcelona: currency, EU flag, cost index, airports
-    scenarios.ts        the scenario catalogue (33 entries)
-  lib/
-    detectTrip.ts       rule-based trip detection + past-trip finder
-    budget.ts           personal daily budget from past-trip spend × cost index
-    useBudgetTip.ts     fetches /api/budget-tip, 7 s timeout, canned fallback per city
-  arbiter/              catalogue bridge, router adapter, proposals, arbiter queue, policy, tests
-scripts/                check-detection.ts, check-router.ts, arbiter-demo.ts
-docs/                   decisions.md, pitch.md, demo-plan.md, kate-capabilities.md, this file
-```
+  Dates are relative to today.
+- **In production:** the same format comes from KBC's core banking events, or from other banks via PSD2 (e.g. BankMCP). Only this adapter changes.
 
-## 4. Travel Assistant app
+The presenter panel plays the stream forward with **Next tick**. **Run 1,000** pushes a thousand generated customers through the same pipeline.
 
-**Data.** `generatePersona()` builds 251 transactions for "Sofie, 29, Leuven" with a fixed seed (`mulberry32(42)`):
-- **Everyday life:** salary, rent, groceries, rail, restaurants and subscriptions.
-- **A past trip:** a Barcelona weekend about 4 months ago, including card spend in Spain.
-- **The trip to detect:** a Brussels Airlines BRU–JFK flight and a Booking.com New York hotel, both paid 2 days ago.
+## 4. Stage 1 — Detection: rules first, Jev where meaning matters
 
-Dates are relative to today, so the demo never goes stale.
+Every scenario in the catalogue has a `decider`:
 
-**Detection** (`detectTrip.ts`) uses rules only:
-1. It keeps outgoing payments whose merchant category code (MCC) is a travel code (`mcc.ts`), from the last 45 days.
-2. It finds the destination from the route in the description (`BRU-JFK`, ignoring Belgian airports) or from a city name.
-3. It groups payments per destination. The score is the sum of the weights of the booking types present (flight 0.55, lodging or agency 0.35, car 0.1), plus 0.07 when there's more than one type, capped at 0.97. At 0.5 or more the trip counts as detected.
-4. `findPastTrip` treats an older booking followed by card spend in that country as a past trip, and uses it for the budget.
+- **Rules** (12 scenarios, plus travel) handle what code can decide exactly and for free: amounts, repeats, balances and dates.
+  - `detectTrip` recognises a booked trip from merchant category codes (MCC).
+    1. It takes outgoing travel payments from the last 45 days: flights, lodging, travel agencies, car rental.
+    2. It finds the destination from the route (`BRU-JFK`) or a city name.
+    3. It scores each destination by booking type (flight 0.55, lodging 0.35, car 0.1, plus 0.07 for a combination).
 
-Result on the persona: New York, confidence 0.97, 2 pieces of evidence, run in about 0.5 ms.
+    For Sofie: New York, 0.97, in about 0.5 ms.
+  - Other rule detectors cover duplicate payments (same amount and counterparty within 3 days), low balance, card-limit use, new direct debits, repeated manual transfers, upcoming bills and unusual spending.
+- **Jev** (21 scenarios) handles payments whose meaning matters, e.g. "VANDENBROUCKE DAKWERKEN" is a roofer and "AZ SINT-JAN" is a hospital.
+  - `POST /api/route-transaction` sends **one** TypeSafe request per payment with two questions:
+    - a **Choice** over the scenarios' trigger texts plus `none`;
+    - a **Noul** (yes/no probability): does this signal a new need or life event?
+  - It returns the picked scenario, the top 3 with probabilities, and a channel: `push` for life events, `feed` for everyday opportunities.
+  - Routine spending (groceries, Spotify) lands on `none` and stops here.
 
-**Budget** (`budget.ts`): daily budget = what she spent per day on her last trip × the new destination's cost index ÷ the old one's, rounded to €5. It's split into food 50%, activities 30% and local transport. Without a past trip, it's estimated from leisure spending at home.
+Both deciders produce the same output, a `ClassifiedTransaction`: the situation, a probability per situation, and the channel.
+- When Jev is unreachable, the catalogue's MCC hints stand in with a fixed confidence of 0.7.
+- Rules and Jev can see the same payment. Their results then **merge** in the arbiter (stage 4), so two independent signals strengthen each other instead of competing.
 
-**AI tip:** the endpoint gets the city, the budget and how it was calculated. The instructions ask for 2 sentences, no markdown, and never recommending other banks. The browser aborts the call after 7 s and the server's call after 6 s; on failure a canned tip per city is shown.
+## 5. Stage 2 — Situations: the catalogue
 
-**Flow** (`flow.ts`, `App.tsx`): a linear list of steps kept in React state, with no router or store. Inside the EU the currency and eSIM steps are skipped.
+`src/data/scenarios.ts` lists the **33 KBC scenarios a payment can trigger**, using KBC's own wording for what Kate does. The ~120 reactive capabilities (find an ATM, contact KBC) stay out of it; see `docs/kate-capabilities.md`.
 
-**Presenter panel** (`PresenterPanel.tsx`): shown on screens at least 1280 px wide.
-- **Evidence and confidence:** the payments that triggered detection and the resulting confidence.
-- **Speed:** the time per customer, measured live over 300 runs and multiplied by 2.3 million customers.
-- **Remote control:** jump to any step, or restart the demo.
+- **Situations:** scenarios that share a `lifeEvent` form one situation.
+  - `travel` = check card abroad + travel insurance.
+  - `moving` = update address + review home insurance.
+  - `home-damage` = claim + storm damage.
+- **Confidence:** the probabilities of a situation's scenarios add up. A flight that Jev splits 0.52 / 0.39 between travel insurance and the card check is a 0.91 travel situation, so both actions are proposed.
+- **Settings per scenario** (`catalogue.ts`), added on top of the catalogue:
+  - **offer** (sells something) or **service** (helps);
+  - product rules, e.g. offers only to customers without the product, claims only to customers with it;
+  - timing: `now`, `before_event` (e.g. 7 days before the flight) or `after` (e.g. 25 days after a voucher order);
+  - expiry.
 
-## 5. Scenario catalogue (`src/data/scenarios.ts`)
+Adding a scenario means adding one catalogue entry. Detection, the arbiter and the experience don't change.
 
-- **Scope:** 33 of the ~150 Kate capabilities that KBC lists publicly, keeping only those a payment can trigger. The rest are listed in `docs/kate-capabilities.md`.
-- **Fields per entry:**
-  - `id` and `category`.
-  - `kbc`: KBC's own wording.
-  - `trigger`: what the payment looks like when it signals the need.
-  - `decider`: who decides whether it fires (see below).
-  - `lifeEvent` (optional): e.g. `travel`, `moving`, `new-pet`.
-  - `mcc` (optional): merchant category codes that make the scenario likely.
-- **Who decides** (`decider`):
-  - `'rules'`, 12 scenarios: amounts, repeats, balances and dates (duplicate payment, low balance, card limit…).
-  - `'jev'`, 21 scenarios: where the meaning of the payment matters, e.g. "VANDENBROUCKE DAKWERKEN" is a roofer.
-- **`jevCriteria()`** turns the Jev scenarios' `trigger` texts into the option list for Jev's Choice question, plus a `none` option for routine spending.
+## 6. Stage 3 — Proposals
 
-## 6. Jev router (`server/scenarioRouter.ts`)
+`createProposals()` turns a classified transaction into one proposal per action the customer qualifies for. A proposal is a *request* to contact the customer, never the contact itself. Each proposal holds:
+- the action and product, confidence and channel;
+- the earliest send time and an expiry;
+- the transactions behind it, which feed "Why am I seeing this?".
 
-`POST /api/route-transaction { transaction }` sends **one** TypeSafe request with two questions:
-- `scenario`, a **Choice** over the 21 Jev scenarios plus `none`.
-- `lifeEvent`, a **Noul** (yes/no probability): is this a new need or life event?
+For Sofie's New York trip:
+- **Travel insurance** (offer, send now: cancellation cover must start at booking). Product rule: she has no travel insurance.
+- **Check card abroad** (service, 7 days before departure).
 
-Jev sees the description, the amount, whether money goes in or out, the MCC label and the merchant country.
+## 7. Stage 4 — The arbiter
 
-**Output (`RouteResult`):**
-- `pick`: fires only when Jev didn't choose `none` and the top probability is at least 0.3.
-- `channel`: `push` when the life-event probability is at least 0.3, otherwise `feed`.
-- `shortlist`: the top 3 scenarios.
-- `none`, `lifeEvent`, `model` and `ms`.
-
-Timeout 6 s with 1 retry. Without a key, or on any error, it returns 503 and the caller carries on.
-
-`check:router` sends 12 labelled payments through it (flights, a roofer, a vet, a hospital, energy, vouchers, groceries, Spotify…) and prints how many route as expected.
-
-## 7. Arbiter (`src/arbiter/`)
-
-Pipeline: **router answer → situation → proposals → per-customer queue → decision.** The arbiter is pure TypeScript with no dependencies: it runs in the browser or in Node, and holds its state in memory.
-
-**Catalogue bridge** (`catalogue.ts`):
-- **Situations:** catalogue scenarios that share a `lifeEvent` form one situation. For example, `travel` = `card-abroad-check` + `travel-insurance`, and `moving` = `update-address` + `home-insurance-review`. A scenario without a life event is its own situation.
-- **Settings per scenario:**
-  - `kind`: an `offer` (sells something) or a `service` (helps).
-  - Product rules: e.g. offers only to customers who don't have the product yet, claims only to those who do.
-  - `timing`: `now`, `before_event` (N days before e.g. the flight), or `after` (N days after the payment).
-  - Expiry.
-
-  Anything not listed defaults to: service, sent now, valid 30 days.
-
-**Router adapter** (`fromRouter.ts`):
-- `fromRoute()` adds up the shortlist probabilities within the chosen situation. For example, 0.52 travel-insurance + 0.39 card-abroad-check gives 0.91 travel. It also fills in the time of day and the customer, and passes on Jev's `channel`.
-- `fromMcc()` is the fallback without Jev: the first Jev scenario whose MCC hints match, at confidence 0.7.
-- `classify()` is a browser helper: it calls the router and falls back to MCC on 503 or a network error.
-
-**Proposals** (`proposals.ts`): one per action the customer qualifies for. Each has an earliest send time (`notBefore`), an expiry, the transactions behind it (evidence) and the channel. For `before_event`, the event date comes from the classifier or from a date in the description such as `14NOV`.
-
-**Arbiter** (`arbiter.ts`) is driven by the caller: `submit(proposal)`, `tick(now)`, `feedback(answer)`. It has no clock of its own.
+The arbiter keeps **one queue per customer**. On every tick it takes a decision for each proposal:
 
 | Decision | When |
 |---|---|
-| merge | the same situation + action is already queued; confidence = `1 − (1 − a)(1 − b)` |
-| drop | expired · declined in the last 30 days (365 days after a "yes") · confidence < 0.4 |
-| hold | before `notBefore` · medium-confidence offer waiting up to 7 days for more evidence · quiet hours 21:00–08:00 · contact limit reached · waiting for an answer to a question |
-| send | `offer` (confidence ≥ 0.7), `service` (never rate-limited), or `question` (medium confidence: offers after 7 days without more evidence, services right away) |
+| **merge** | The same action is already queued. Confidence = `1 − (1 − a)(1 − b)`, e.g. 0.55 and 0.6 become 0.82. |
+| **hold** | Before its send time · a medium-confidence offer waiting up to 7 days for more evidence · quiet hours (21:00–08:00) · contact limit reached · waiting for the customer's answer |
+| **send** | As an **offer** (confidence ≥ 0.7), a **service**, or a light **question** (medium confidence) |
+| **drop** | Expired · the customer said no in the last 30 days · already bought · confidence < 0.4 |
 
-- **Contact limit:** per customer, 1 offer and 2 questions per rolling 7 days. Services don't count toward it.
-- **Order:** highest confidence first, then the one that expires soonest.
-- **Holds:** each hold is reported once, not on every tick.
-- **Answers:** "Yes" to a question raises the confidence to 0.9 and puts the proposal back in the queue.
-- **Monitoring:** `queue()` and `stats()` provide the data for a pipeline view.
+**Contact policy:**
+- Per customer, at most **1 offer and 2 questions per rolling week**.
+- Services (duplicate payment, card abroad, low balance) are never rate-limited.
+- When several proposals are ready at once, the highest confidence goes first and the rest wait with reason *contact limit*.
 
-**Contract** (`types.ts`):
-- In: `ClassifiedTransaction`, `Customer`.
-- Out: `Decision { decision, action, reason, detail, confidence, proposal }`.
-- Back: `Feedback { scenario, actionId, answer }`.
+The arbiter has no clock of its own. The presenter panel's ticks drive it in the demo; a scheduler drives it in production. It is plain TypeScript with no dependencies. Every decision carries a human-readable reason, which the presenter panel shows and "Why am I seeing this?" reuses.
 
-Times are local wall-clock strings (`2026-11-04T08:00`), parsed as UTC so that hours are compared correctly on any machine.
+## 8. Stage 5 — The experience
 
-**Tests** (`arbiter.test.ts`, 25 tests):
-- The full stage script from `docs/demo-plan.md`.
-- Merging, questions, blocking, contact limits, service bypass, quiet hours and expiry.
-- Timing, and which customers qualify for which actions.
-- That every catalogue scenario appears exactly once, and the router adapter.
+The arbiter's **send** decisions go to Kate in the KBC app:
+- **Channel:** a `push` channel appears as a notification on the phone's home screen, and `feed` as a card in the app.
+- **Wording:**
+  - offers use the product and its reason;
+  - services are phrased as help ("Your card isn't enabled for the US yet");
+  - questions stay light ("Planning a trip?").
 
-## 8. Gaps and risks
+Sending the travel offer opens the **Travel Assistant**, the full journey for the travel situation:
+1. **Trip detected**, with "Why am I seeing this?" listing the two card payments and their MCCs.
+2. **Travel insurance**, single trip or annual.
+3. **Destination and dates**, pre-filled from `BRU-JFK`.
+4. **Budget:** €110 a day, from her own Barcelona spending (€75 a day) × New York's cost index (+45%). Kate adds a personal money tip from OpenAI, with a canned tip per city as fallback.
+5. **Currency**, from her own budget, picked up at her branch.
+6. **eSIM**, sized to the trip length.
+7. **Trip ready**: one checklist.
 
-1. **The UI doesn't use the router or the arbiter yet.** The app runs on `detectTrip` alone. Nothing in the UI calls `/api/route-transaction` or `classify()`. The pipeline view described in `docs/demo-plan.md` (5 columns, "Next tick", "Run 1,000") doesn't exist yet. *Fix:* a pipeline screen next to the phone, fed by `classify()` → `createProposals()` → `Arbiter`.
-2. **Two personas, two stories.** The app and `pitch.md` use Sofie (Leuven, New York, relative dates). The arbiter uses Lotte (Ghent, Barcelona and pet insurance, fixed November 2026 dates). *Fix:* run the arbiter on Sofie's `transactions` and choose one pitch.
-3. **The 12 rule-decided scenarios are never detected.** Only travel has rule code (`detectTrip`). Duplicate payment, low balance, card limit and the others exist only in the catalogue.
-4. **Travel is detected twice, in different ways.** `detectTrip` scores weighted MCC groups (0.97). The router asks Jev per payment, and the arbiter adds up the probabilities. They can disagree on stage. *Fix:* treat `detectTrip` as the rules decider for `travel` and feed its result into the arbiter like any other classification.
-5. **Thresholds don't match.** The router fires at 0.3, the arbiter drops below 0.4, and `detectTrip` fires at 0.5. None are tuned; `check:router` gives the first real numbers.
-6. **The MCC fallback decides.** `fromMcc()` acts on MCC hints at 0.7, which goes against the catalogue's rule that "MCC hints never decide". It's accepted as a stage safety net only.
-7. **The APIs only exist in dev and preview.** The endpoints are Vite middleware, so a static deployment of `dist/` has no API. The canned fallbacks keep the UI working, and it's fine for a laptop demo.
-8. **The arbiter only keeps state in memory.** Queues, contact history and blocks are lost on reload, and there's no customer store. Fine for the demo; production would need a store per customer.
-9. **The docs disagree.** `README.md` doesn't mention the Jev router, the arbiter or `npm test`. `pitch.md` says 2.3 million customers and the challenge brief says 2.5 million. `docs/demo-plan.md` describes the arbiter demo and `pitch.md` describes the Travel Assistant.
-10. **Two AI providers.** OpenAI writes the tip and TypeSafe classifies. Two keys, and two vendors to explain on the GDPR and data-residency question (both US-hosted).
+Inside the EU the currency and eSIM steps disappear: personalisation also means not selling what she doesn't need.
 
-## 9. How it would scale (pitch material, not built)
+## 9. Stage 6 — Feedback
 
-Payment events from KBC's core systems (or PSD2 via BankMCP) go through the same pipeline:
-1. **Cheap filters:** rules and MCC codes.
-2. **Jev**, only where the meaning of the payment matters.
-3. **Situations and proposals.**
-4. **An arbiter per customer**, keyed by customer ID.
-5. **Channels:** Kate chat, push, the in-app feed, or an advisor.
+Every answer returns to the arbiter:
+- **Add** / **Yes** closes the proposal. That action isn't proposed again for a year.
+- **Not now** / **No** blocks that action for 30 days and drops its queued proposals.
+- **Yes to a light question** raises the confidence to 0.9 and requeues the proposal as an offer.
 
-Only step 5 talks to the customer, and the arbiter keeps that rare.
+## 10. Presenter panel: the pipeline, live
 
-The presenter panel's measurement gives a lower bound for the rules step: about 0.5 ms per customer, so a few minutes for 2.3 million customers on one laptop. Jev's cost scales with the number of payments that pass the filters, not with all payments.
+Next to the phone, the panel shows what the engine does, stage by stage:
+- **Incoming:** every payment as it arrives.
+- **Classified:** decided by rules or by Jev, with probabilities.
+- **Proposals:** the actions each situation produced.
+- **Arbiter queue:** each proposal with its state: held (with reason), merged, sent or dropped.
+- **Counters:** e.g. *1,000 transactions → 62 proposals → 14 sent, 31 held, 17 dropped*.
+- **Speed:** detection time per customer, measured live and projected to all KBC customers.
+
+It is also the presenter's remote control: **Next tick**, **Run 1,000**, jump to any screen, and **Restart**.
+
+## 11. The stage run
+
+1. **Routine payments** (groceries, rail, Spotify) → `none` → nothing happens. *"Most payments need nothing."*
+2. **Flight and hotel to New York** → rules 0.97 + Jev → `travel` situation:
+   - travel insurance is **sent now** as a push, and Sofie opens the Travel Assistant;
+   - the card check is **held until 7 days before departure**.
+3. **A vet payment** → Jev → `new-pet` → pet insurance **held: contact limit**. *"She already got one offer this week. Kate waits."*
+4. **Tick forward to a week before departure** → the card check goes out anyway: *"It's a service, not a sale."*
+5. **Run 1,000** → the counters show how little of the stream ever reaches a customer.
+
+## 12. Scale
+
+In production the same pipeline runs on KBC's event stream:
+1. **Rules** run on every payment. They cost about 0.5 ms per customer, so all KBC customers take minutes on one machine.
+2. **Jev** runs only on payments that rules and MCC filters can't settle. One request answers all scenarios, so cost grows with interesting payments, not with the catalogue.
+3. **The arbiter** is keyed by customer ID. Queues are independent, so it scales horizontally with a small state store per customer.
+4. **Channels** (Kate chat, push, feed, advisor) receive only what the arbiter releases.
+
+Adding a product or life event is a catalogue entry. Adding a data source is an adapter to the shared transaction format.
+
+## 13. Quality
+
+- **Pipeline tests** (vitest) cover:
+  - the full stage run;
+  - merging, holds, the contact policy, services vs offers, quiet hours, expiry and feedback;
+  - timing and product rules;
+  - that every catalogue scenario appears exactly once;
+  - the Jev adapter.
+- **Scripts:**
+  - `npm run check` asserts that the rule detectors find New York at 0.97 and nothing without travel payments;
+  - `npm run check:router` sends 12 labelled payments through Jev and reports how many route as expected.
+- **Resilience:** every external call (Jev, OpenAI) has a timeout and a fallback, so the demo never hangs on stage.
