@@ -16,8 +16,8 @@ All work is tracked in GitHub. No other task tool.
 
 ### Rules
 1. **One task = one issue.** No work without an issue. Write the title as an outcome: "User can log in with email", not "auth stuff".
-2. **One owner per issue.** Assign yourself before you start, and move the card to `In Progress`. Unassigned = free to take.
-   New issues and PRs land on the board in `Todo` automatically.
+2. **One owner per issue.** Assign yourself before you start. Unassigned = free to take.
+   The board moves cards itself: new issue → `Todo`, PR with `Closes #n` → `In Progress`, merge → `Done`. Don't move cards by hand.
 3. **Label the priority.** `must` = the demo breaks without it. `nice` = only if time is left. Finish all `must` before any `nice`.
 4. **Keep issues small.** One issue fits in 2 hours or less. Split it if not.
 5. **Branch per issue.** Name: `<issue-number>-<short-slug>`, e.g. `12-email-login`.
@@ -39,6 +39,12 @@ gh pr merge --squash --delete-branch
 - Before you write code, find the issue for the task. If there is none, ask the user whether to create one.
 - Stay inside the scope of the issue. Note other problems as a new issue, don't fix them in the same PR.
 - Never push to `main` directly. Never merge without the user's approval.
+
+## Skills
+Claude Code finds these in `.claude/skills/`; Codex reads `.agents/skills/`. Other tools: read the `SKILL.md` directly.
+- `/next` — "what should I do now?" Read-only, ranked.
+- `/grill <topic>` — settle open decisions before building. Logs to `docs/decisions.md`.
+- `/ship-issue <n>` — take issue #n to an open PR. Never merges.
 
 ## Stack
 _To be decided. Default: TypeScript, React functional components, Tailwind._
