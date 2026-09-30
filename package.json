@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check": "tsx scripts/check-detection.ts"
+    "check": "tsx scripts/check-detection.ts",
+    "check:router": "tsx scripts/check-router.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@typesafe-ai/sdk": "^0.6.0",
     "openai": "^6.49.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
