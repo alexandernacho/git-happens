@@ -1,6 +1,7 @@
 import { destinations, type Destination } from '../data/destinations'
 import { travelKind, type TravelKind } from '../data/mcc'
 import type { Transaction } from '../data/transactions'
+import { daysBetween } from './format'
 
 const LOOKBACK_DAYS = 45 // bookings older than this are trips already taken (or long past)
 const HOME_AIRPORTS = ['BRU', 'CRL', 'ANR', 'LGG', 'OST']
@@ -31,10 +32,6 @@ export function resolveDestination(description: string): Destination | null {
   }
   const upper = description.toUpperCase()
   return destinations.find((d) => upper.includes(d.city.toUpperCase())) ?? null
-}
-
-function daysBetween(a: string, b: string): number {
-  return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000)
 }
 
 export function detectTrip(transactions: Transaction[], today = new Date()): TripDetection {
