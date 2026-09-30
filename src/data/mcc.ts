@@ -30,4 +30,9 @@ export const mccLabels: Record<number, string> = {
   5691: 'Clothing',
   5912: 'Pharmacy',
   7991: 'Tourist attractions',
+  5732: 'Electronics',
+  742: 'Veterinary services',
+  7531: 'Auto body repair',
+  8062: 'Hospitals',
+  4900: 'Utilities',
 }

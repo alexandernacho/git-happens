@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check": "tsx scripts/check-detection.ts"
+    "check": "tsx scripts/check-detection.ts",
+    "check:router": "tsx scripts/check-router.ts",
+    "test": "vitest run",
+    "arbiter": "tsx scripts/arbiter-demo.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@typesafe-ai/sdk": "^0.6.0",
     "openai": "^6.49.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -23,6 +27,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
   }
 }
